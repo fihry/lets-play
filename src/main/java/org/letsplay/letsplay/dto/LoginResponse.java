@@ -3,6 +3,6 @@ package org.letsplay.letsplay.dto;
 import lombok.Data;
 
 @Data
-public class userRresponse {
+public class LoginResponse {
     private String token;
 }

@@ -3,8 +3,7 @@ package org.letsplay.letsplay.dto;
 import lombok.Data;
 
 @Data
-public class registerDto {
+public class LoginDto {
     private String username;
     private String password;
-    private String email;
 }

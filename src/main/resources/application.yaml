@@ -1,3 +1,13 @@
 spring:
   application:
-    name: lets-play
+    name: letsPlay
+  data:
+    mongodb:
+      uri: mongodb+srv://fihrylara_db_user:${DB_PASSWORD}@cluster0.thn0ldd.mongodb.net/fihrylara?retryWrites=true&w=majority&appName=Cluster0
+
+server:
+  port: ${API_PORT:3000}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:86400000}
