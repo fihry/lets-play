@@ -1,6 +1,5 @@
 package org.letsplay.letsplay.service;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -15,9 +14,12 @@ import org.letsplay.letsplay.security.JwtService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
+import org.letsplay.letsplay.types.AuthTypes;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,41 +29,42 @@ public class UserService {
     private static final Log log = LogFactory.getLog(UserService.class);
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    private JwtService jwtService;
-    public LoginResponse login(@Valid LoginDto loginDto) {
-        var user = userRepository.findByUsername(loginDto.getUsername());
-        if(user.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid credentials");
-        }
-        var createdPassword = passwordEncoder.encode(loginDto.getPassword());
-        if(!createdPassword.equals(user.get().getPassword()))
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
-        String token = jwtService.generateToken(user.get().getUuid());
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
+    public LoginResponse login(LoginDto loginDto) {
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        loginDto.getUsername(),
+                        loginDto.getPassword()
+                )
+        );
+        var user = userRepository.findByUsername(loginDto.getUsername())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
+        
+        var jwtToken = jwtService.generateToken(user);
         var response = new LoginResponse();
-        response.setToken(token);
+        response.setToken(jwtToken);
         return response;
     }
 
-    public LoginResponse register(@Valid RegisterDto registerDto) {
-        var isAlreadyExists = userRepository.existsByUsername(registerDto.getUsername());
-        if (!isAlreadyExists) {
-            var user = new User();
-            var createdPassword = passwordEncoder.encode(registerDto.getPassword());
-            user.setUsername(registerDto.getUsername());
-            user.setPassword(createdPassword);
-            user.setEmail(registerDto.getEmail());
-            try {
-                userRepository.save(user);
-            } catch (Exception e) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid credentials");
-            }
-            var response = new LoginResponse();
-            response.setToken(jwtService.generateToken(user.getUuid()));
-            return response;
-        } else {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Username is already taken");
+    public LoginResponse register(RegisterDto registerDto) {
+        if (userRepository.existsByUsername(registerDto.getUsername())) {
+             throw new ApiException(HttpStatus.BAD_REQUEST, "Username is already taken");
         }
+        var user = new User();
+        user.setUsername(registerDto.getUsername());
+        user.setPassword(passwordEncoder.encode(registerDto.getPassword()));
+        user.setEmail(registerDto.getEmail());
+        user.setRole(AuthTypes.USER);
+        
+        try {
+            userRepository.save(user);
+        } catch (Exception e) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Error saving user: " + e.getMessage());
+        }
+        var response = new LoginResponse();
+        response.setToken(jwtService.generateToken(user));
+        return response;
     }
 
     public UserDto getUserByUuid(UUID uuid) {
